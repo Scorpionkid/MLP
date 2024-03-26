@@ -12,7 +12,11 @@ class MLP(nn.Module):
         self.device = device
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, out_size)
+        self.fc3 = nn.Linear(hidden_size, hidden_size)
+        self.fc4 = nn.Linear(hidden_size, hidden_size)
+        self.fc5 = nn.Linear(hidden_size, hidden_size)
+        self.fc6 = nn.Linear(hidden_size, hidden_size)
+        self.fc7 = nn.Linear(hidden_size, out_size)
 
     def forward(self, src):
         N, T, C = src.shape
@@ -21,6 +25,14 @@ class MLP(nn.Module):
         src = self.fc2(src)
         src = F.relu(src)
         src = self.fc3(src)
+        src = F.relu(src)
+        src = self.fc4(src)
+        src = F.relu(src)
+        src = self.fc5(src)
+        src = F.relu(src)
+        src = self.fc6(src)
+        src = F.relu(src)
+        src = self.fc7(src)
         return src
 
 
