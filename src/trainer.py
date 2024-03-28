@@ -38,15 +38,14 @@ class TrainerConfig:
 
 
 class Trainer:
-    def __init__(self, model, train_dataset, test_dataset, config):
+    def __init__(self, model, train_dataloader, test_dataloader, config):
         self.Loss_train = []
         self.r2_train = []
         self.Loss_test = []
         self.r2_test = []
         self.model = model
-        self.train_dataset = train_dataset
-        self.test_dataset = test_dataset
-        self.t = False
+        self.train_dataloader = train_dataloader
+        self.test_dataloader = test_dataloader
         self.config = config
         self.avg_test_loss = 0
         self.tokens = 0     # counter used for learning rate decay
@@ -57,7 +56,7 @@ class Trainer:
         self.model = torch.nn.DataParallel(self.model).to(self.device)
 
     def get_runName(self):
-        rawModel = self.model.module if hasattr(self.model, "module") else self.model
+        # rawModel = self.model.module if hasattr(self.model, "module") else self.model
         cfg = self.config
         runName = (cfg.modelType) + str(cfg.seq_size) + '-' + str(cfg.hidden_size) + '-' + str(cfg.out_dim)
 
@@ -70,12 +69,9 @@ class Trainer:
         totalR2s = 0
         self.t = split == 'train'
         model.train(self.t)
-        data = self.train_dataset
-        loader = DataLoader(data, shuffle=True, pin_memory=True, batch_size=config.batchSize,
-                            num_workers=config.numWorkers)
 
-        pbar = tqdm(enumerate(loader), total=len(loader),
-                    bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}') if self.t else enumerate(loader)
+        pbar = tqdm(enumerate(self.train_dataloader), total=len(self.train_dataloader),
+                    bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
 
         ct = 0
         for it, (x, y) in pbar:
@@ -84,8 +80,8 @@ class Trainer:
 
             with torch.set_grad_enabled(self.t):
                 out = model(x)
-                predicts.append(out.view(-1, 2))
-                targets.append(y.view(-1, 2))
+                # predicts.append(out.view(-1, 2))
+                # targets.append(y.view(-1, 2))
                 # loss = loss.mean()
 
                 if self.t:
@@ -124,8 +120,10 @@ class Trainer:
                     pbar.set_description(
                         f"epoch {epoch+1} progress {progress * 100.0:.2f}% iter {it + 1}: r2_score "
                         f"{totalR2s / (it + 1):.2f} loss {totalLoss / (it + 1):.4f} lr {lr:e}")
+
         self.Loss_train.append(totalLoss / ct)
         self.r2_train.append(totalR2s / ct)
+
         return predicts, targets
 
     def train(self):
@@ -139,7 +137,7 @@ class Trainer:
                                                                                               config.maxEpochs - 1):
                 # DataParallel wrappers keep raw model object in .module
                 rawModel = self.model.module if hasattr(self.model, "module") else self.model
-                torch.save(rawModel, self.config.epochSavePath + str(epoch + 1) + '.pth')
+                # torch.save(rawModel, self.config.epochSavePath + str(epoch + 1) + '.pth')
 
             # save the model predicts and targets every 10 epoch
             # if (epoch + 1) % config.epochSaveFrequency == 0:
@@ -151,35 +149,49 @@ class Trainer:
 
         predicts = []
         targets = []
-        self.t = False
-        model.train(self.t)
-        data = self.test_dataset
+        model.eval()
         totalLoss = 0
         totalR2s = 0
-        loader = DataLoader(data, shuffle=True, pin_memory=True,
-                            batch_size=config.batchSize,
-                            num_workers=config.numWorkers)
 
-        pbar = tqdm(enumerate(loader), total=len(loader),
-                    bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}') if self.t else enumerate(loader)
-        ct =  0
-        for it, (x, y) in pbar:
-            x = x.to(self.device)  # place data on the correct device
-            y = y.to(self.device)
-            ct += 1
-
-            with torch.set_grad_enabled(self.t):
-                out = model(x)  # forward the model
-                predicts.append(out.view(-1, 2))
-                targets.append(y.view(-1, 2))
+        pbar = tqdm(enumerate(self.test_dataloader), total=len(self.test_dataloader))
+        with torch.no_grad():
+            for ct, (data, target) in pbar:
+                data = data.to(self.device)
+                target = target.to(self.device)
+                out = model(data)  # forward the model
+                predicts.append(out.detach().cpu().view(-1, 2))
+                targets.append(target.detach().cpu().view(-1, 2))
                 # loss = loss.mean()  # collapse all losses if they are scattered on multiple gpus
-                loss = self.config.criterion(out.view(-1, 2), y.view(-1, 2))
-                r2_s = r2_score(out.view(-1, 2), y.view(-1, 2))
-            totalLoss += loss.item()
-            totalR2s += r2_s.item()
-            self.Loss_test.append(loss.item())
-            self.r2_test.append(r2_s.item())
-            print(f"Batch Loss: {loss:.4f} R2_score: {r2_s:.4f}")
+                loss = self.config.criterion(out.view(-1, 2), target.view(-1, 2))
+                r2_s = r2_score(out.view(-1, 2), target.view(-1, 2))
+                print(f"Batch Loss: {loss:.4f} R2_score: {r2_s:.4f}")
+
+                totalLoss += loss.item()
+                totalR2s += r2_s.item()
+                self.Loss_test.append(loss.item())
+                self.r2_test.append(r2_s.item())
+
+        ct += 1
+        # pbar = tqdm(enumerate(self.testloader), total=len(self.testloader),
+        #             bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}') if self.t else enumerate(self.testloader)
+        # ct =  0
+        # for it, (x, y) in pbar:
+        #     x = x.to(self.device)  # place data on the correct device
+        #     y = y.to(self.device)
+        #     ct += 1
+
+        #     with torch.set_grad_enabled(self.t):
+        #         out = model(x)  # forward the model
+        #         predicts.append(out.detach().view(-1, 2))
+        #         targets.append(y.detach().view(-1, 2))
+        #         # loss = loss.mean()  # collapse all losses if they are scattered on multiple gpus
+        #         loss = self.config.criterion(out.view(-1, 2), y.view(-1, 2))
+        #         r2_s = r2_score(out.view(-1, 2), y.view(-1, 2))
+        #     totalLoss += loss.item()
+        #     totalR2s += r2_s.item()
+        #     self.Loss_test.append(loss.item())
+        #     self.r2_test.append(r2_s.item())
+        #     print(f"Batch Loss: {loss:.4f} R2_score: {r2_s:.4f}")
 
         MeanLoss = totalLoss / ct
         MeanR2 = totalR2s / ct
@@ -188,36 +200,35 @@ class Trainer:
         save_data2txt(predicts, 'src_trg_data/test_predict.txt')
         save_data2txt(targets, 'src_trg_data/test_target.txt')
 
-        n = 10000
-        tar = torch.cat(targets, dim=0).cpu().detach().numpy()
-        pre = torch.cat(predicts, dim=0).cpu().detach().numpy()
-        tar_x_v = tar[:n, 0]
-        tar_y_v = tar[:n, 1]
-        pre_x_v = pre[:n, 0]
-        pre_y_v = pre[:n, 1]
-
-        fig, axs = plt.subplots(3, 2, figsize=(10, 15))
-
-        axs[0,0].plot(range(0, self.config.maxEpochs), self.Loss_train)
-        axs[0,0].set_title("loss_train")
-        axs[0,1].plot(range(0, self.config.maxEpochs), self.r2_train)
-        axs[0,1].set_title("r2_train")
-
-        axs[1,0].plot(range(0, ct), self.Loss_test)
-        axs[1,0].set_title(f"Loss_test\nMean loss: {MeanLoss:.4f}")
-
-        axs[1,1].plot(range(0, ct), self.r2_test)
-        axs[1,1].set_title(f"r2_test\nMean r2s: {MeanR2:.4f}")
-
-
-        axs[2,0].plot(range(0, len(tar_x_v)), tar_x_v, label='tar_x_v')
-        axs[2,0].plot(range(0, len(pre_x_v)), pre_x_v, label='pre_x_v')
-        axs[2,0].legend()  # 调用特定轴的legend方法
-
-        axs[2,1].plot(range(0, len(tar_y_v)), tar_y_v, label='tar_y_v')
-        axs[2,1].plot(range(0, len(pre_y_v)), pre_y_v, label='pre_y_v')
-        axs[2,1].legend()  # 调用特定轴的legend方法
-
-        # 自动调整子图间距
-        plt.tight_layout()
-        plt.show()
+        # n = 10000
+        # tar = torch.cat(targets, dim=0).numpy()
+        # pre = torch.cat(predicts, dim=0).numpy()
+        # tar_x_v = tar[:n, 0]
+        # tar_y_v = tar[:n, 1]
+        # pre_x_v = pre[:n, 0]
+        # pre_y_v = pre[:n, 1]
+        #
+        # fig, axs = plt.subplots(3, 2, figsize=(10, 15))
+        #
+        # axs[0, 0].plot(range(0, self.config.maxEpochs), self.Loss_train)
+        # axs[0, 0].set_title("loss_train")
+        # axs[0, 1].plot(range(0, self.config.maxEpochs), self.r2_train)
+        # axs[0, 1].set_title("r2_train")
+        #
+        # axs[1, 0].plot(range(0, ct), self.Loss_test)
+        # axs[1, 0].set_title(f"Loss_test\nMean loss: {MeanLoss:.4f}")
+        #
+        # axs[1, 1].plot(range(0, ct), self.r2_test)
+        # axs[1, 1].set_title(f"r2_test\nMean r2s: {MeanR2:.4f}")
+        #
+        # axs[2, 0].plot(range(0, len(tar_x_v)), tar_x_v, label='tar_x_v')
+        # axs[2, 0].plot(range(0, len(pre_x_v)), pre_x_v, label='pre_x_v')
+        # axs[2, 0].legend()  # 调用特定轴的legend方法
+        #
+        # axs[2, 1].plot(range(0, len(tar_y_v)), tar_y_v, label='tar_y_v')
+        # axs[2, 1].plot(range(0, len(pre_y_v)), pre_y_v, label='pre_y_v')
+        # axs[2, 1].legend()  # 调用特定轴的legend方法
+        #
+        # # 自动调整子图间距
+        # plt.tight_layout()
+        # plt.show()
