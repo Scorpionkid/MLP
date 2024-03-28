@@ -42,7 +42,7 @@ seq_size = 128    # the length of the sequence
 input_size = 96
 hidden_size = 256
 out_size = 2   # the output dim
-num_layers = 2
+num_layers = 6
 
 # learning rate
 lrInit = 6e-4 if modelType == "MLP" else 4e3   # Transormer can use higher learning rate
@@ -138,14 +138,18 @@ for spike_file, target_file in zip(spike_files, target_files):
     train_dataloader = DataLoader(train_Dataset, batch_size=batchSize, shuffle=True)
     test_dataloader = DataLoader(test_Dataset, batch_size=len(test_Dataset), shuffle=True)
 
-    # setting the model parameters
-    model = MLP(input_size, hidden_size, out_size)
+    num_hidden_layers = num_layers - 1
+    step = (hidden_size - out_size) / num_hidden_layers
+    # 构建 layerSizes 列表
+    layerSizes = [input_size] + [max(int(hidden_size - step * i), out_size) for i in range(num_hidden_layers)] + [out_size]
+    model = MLP(layerSizes)
     rawModel = model.module if hasattr(model, "module") else model
     rawModel = rawModel.float()
 
     # 定义损失函数和优化器
     criterion = nn.MSELoss()
     optimizer = optim.Adam(rawModel.parameters(), lr=4e-3)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
 
     print('model', modelType, 'epoch', nEpoch, 'batchsz', batchSize,
           'seq_size', seq_size, 'hidden_size', hidden_size, 'num_layers', num_layers)
@@ -156,7 +160,7 @@ for spike_file, target_file in zip(spike_files, target_files):
                           warmupTokens=0, finalTokens=nEpoch*len(train_Dataset)*seq_size, numWorkers=0,
                           epochSaveFrequency=epochSaveFrequency, epochSavePath=epochSavePath,
                           out_dim=out_size, seq_size=seq_size, hidden_size=hidden_size, num_layers=num_layers,
-                          criterion=criterion, optimizer=optimizer)
+                          criterion=criterion, optimizer=optimizer, scheduler=scheduler)
 
     trainer = Trainer(model, train_dataloader, test_dataloader, tConf)
     trainer.train()

@@ -93,6 +93,7 @@ class Trainer:
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradNormClip)
                     self.config.optimizer.step()
+                    self.config.scheduler.step()
 
                     if config.lrDecay:
                         self.tokens += (y >= 0).sum()

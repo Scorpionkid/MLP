@@ -4,35 +4,16 @@ from torch.nn import functional as F
 from torcheval.metrics.functional import r2_score
 # MLP
 class MLP(nn.Module):
-    def __init__(self, input_size, hidden_size, out_size, device = "cuda"):
+    def __init__(self, layerSizes, device = "cuda"):
         super(MLP, self).__init__()
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.out_size = out_size
+        self.layers = nn.ModuleList([nn.Linear(prev_layer_size, next_layer_size)
+                                     for prev_layer_size, next_layer_size in
+                                     zip(layerSizes[:-1], layerSizes[1:])])
         self.device = device
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, hidden_size)
-        self.fc4 = nn.Linear(hidden_size, hidden_size)
-        self.fc5 = nn.Linear(hidden_size, hidden_size)
-        self.fc6 = nn.Linear(hidden_size, hidden_size)
-        self.fc7 = nn.Linear(hidden_size, out_size)
 
     def forward(self, src):
-        N, T, C = src.shape
-        src = self.fc1(src)
-        src = F.relu(src)
-        src = self.fc2(src)
-        src = F.relu(src)
-        src = self.fc3(src)
-        src = F.relu(src)
-        src = self.fc4(src)
-        src = F.relu(src)
-        src = self.fc5(src)
-        src = F.relu(src)
-        src = self.fc6(src)
-        src = F.relu(src)
-        src = self.fc7(src)
+        for layer in self.layers:
+            src = torch.relu(layer(src))  # 或者使用其他激活函数，如 sigmoid, tanh 等
         return src
 
 
