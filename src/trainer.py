@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.optim as optim
 import logging
 from tqdm.auto import tqdm
-from torch.utils.data.dataloader import DataLoader
 from torch.nn import functional as F
 from torcheval.metrics.functional import r2_score
 import matplotlib.pyplot as plt
@@ -91,7 +90,7 @@ class Trainer:
                     totalLoss += loss.item()
                     totalR2s += r2_s.item()
                     loss.backward()
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradNormClip)
+                    # torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradNormClip)
                     self.config.optimizer.step()
                     ct += 1
 
@@ -118,8 +117,7 @@ class Trainer:
                         lr = config.learningRate
 
                     pbar.set_description(
-                        f"epoch {epoch+1} progress {progress * 100.0:.2f}% iter {it + 1}: r2_score "
-                        f"{totalR2s / (it + 1):.2f} loss {totalLoss / (it + 1):.4f} lr {lr:e}")
+                        f"epoch {epoch+1} iter {it + 1}: r2_score {totalR2s / (it + 1):.2f} loss {totalLoss / (it + 1):.4f} lr {lr:e}")
 
         self.Loss_train.append(totalLoss / ct)
         self.r2_train.append(totalR2s / ct)

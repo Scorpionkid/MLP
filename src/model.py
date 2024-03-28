@@ -5,36 +5,31 @@ from torch.nn import functional as F
 
 # MLP
 class MLP(nn.Module):
-    def __init__(self, input_size, hidden_size, out_size, device = "cuda"):
+    def __init__(self, input_size, layerSizes, out_size, device):
         super(MLP, self).__init__()
         self.input_size = input_size
-        self.hidden_size = hidden_size
         self.out_size = out_size
         self.device = device
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, hidden_size)
-        self.fc4 = nn.Linear(hidden_size, hidden_size)
-        self.fc5 = nn.Linear(hidden_size, hidden_size)
-        self.fc6 = nn.Linear(hidden_size, hidden_size)
-        self.fc7 = nn.Linear(hidden_size, out_size)
+        self.MLP = nn.Sequential()
 
-    def forward(self, src):
-        N, T, C = src.shape
-        src = self.fc1(src)
-        src = F.relu(src)
-        src = self.fc2(src)
-        src = F.relu(src)
-        src = self.fc3(src)
-        src = F.relu(src)
-        src = self.fc4(src)
-        src = F.relu(src)
-        src = self.fc5(src)
-        src = F.relu(src)
-        src = self.fc6(src)
-        src = F.relu(src)
-        src = self.fc7(src)
-        return src
+        for i, (inSize, outSize) in enumerate(zip([input_size] + layerSizes, layerSizes + [out_size])):
+            self.MLP.add_module(
+                name="L{:d}".format(i), module=nn.Linear(inSize, outSize)
+            )
+
+            if i < len(layerSizes):
+                self.MLP.add_module(
+                    name="A{:d}".format(i), module=nn.ReLU()
+                )
+            # else:
+            #     self.MLP.add_module(
+            #         name="A{:d}".format(i), module=nn.Softmax()
+            #     )
+
+    def forward(self, input):
+        output = self.MLP(input)
+
+        return output
 
 
 

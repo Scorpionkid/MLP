@@ -293,3 +293,27 @@ def Reshape_ctxLen(spike, target, ctx_len):
     target = target.reshape(batch, ctx_len, -1)
 
     return spike, target
+
+
+def loadAllDays(data_path):
+    folderPath = data_path
+    name = ['spike/', 'target/']
+    spike = []
+    target = []
+
+    # load spike data
+    for filename in os.listdir(os.path.join(folderPath, name[0])):
+        file_path = os.path.join(folderPath, name[0], filename)
+        temp = np.load(file_path)
+        spike.append(temp)
+
+    # load target data
+    for filename in os.listdir(os.path.join(folderPath, name[1])):
+        file_path = os.path.join(folderPath, name[1], filename)
+        temp = np.load(file_path)
+        target.append(temp)
+
+    s = np.concatenate(spike, axis=0)
+    t = np.concatenate(target, axis=0)
+
+    return s, t
