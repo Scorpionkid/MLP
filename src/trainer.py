@@ -38,10 +38,6 @@ class TrainerConfig:
 
 class Trainer:
     def __init__(self, model, train_dataloader, test_dataloader, config):
-        self.Loss_train = []
-        self.r2_train = []
-        self.Loss_test = []
-        self.r2_test = []
         self.model = model
         self.train_dataloader = train_dataloader
         self.test_dataloader = test_dataloader
@@ -83,44 +79,43 @@ class Trainer:
                 # targets.append(y.view(-1, 2))
                 # loss = loss.mean()
 
-                if self.t:
-                    model.zero_grad()
-                    loss = self.config.criterion(out.view(-1, 2), y.view(-1, 2))
-                    r2_s = r2_score(out.view(-1, 2), y.view(-1, 2))
-                    totalLoss += loss.item()
-                    totalR2s += r2_s.item()
-                    loss.backward()
-                    # torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradNormClip)
-                    self.config.optimizer.step()
-                    ct += 1
+                model.zero_grad()
+                loss = self.config.criterion(out.view(-1, 2), y.view(-1, 2))
+                r2_s = r2_score(out.view(-1, 2), y.view(-1, 2))
+                totalLoss += loss.item()
+                totalR2s += r2_s.item()
+                loss.backward()
+                # torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradNormClip)
+                self.config.optimizer.step()
+                ct += 1
 
-                    if config.lrDecay:
-                        self.tokens += (y >= 0).sum()
-                        lrFinalFactor = config.lrFinal / config.learningRate
-                        if self.tokens < config.warmupTokens:
-                            # linear warmup
-                            lrMult = lrFinalFactor + (1 - lrFinalFactor) * float(self.tokens) / float(
-                                config.warmupTokens)
-                            progress = 0
-                        else:
-                            # cosine learning rate decay
-                            progress = float(self.tokens - config.warmupTokens) / float(
-                                max(1, config.finalTokens - config.warmupTokens))
-                            # progress = min(progress * 1.1, 1.0) # more fine-tuning with low LR
-                            lrMult = (0.5 + lrFinalFactor / 2) + (0.5 - lrFinalFactor / 2) * math.cos(
-                                math.pi * progress)
-
-                        lr = config.learningRate * lrMult
-                        for paramGroup in self.config.optimizer.param_groups:
-                            paramGroup['lr'] = lr
+                if config.lrDecay:
+                    self.tokens += (y >= 0).sum()
+                    lrFinalFactor = config.lrFinal / config.learningRate
+                    if self.tokens < config.warmupTokens:
+                        # linear warmup
+                        lrMult = lrFinalFactor + (1 - lrFinalFactor) * float(self.tokens) / float(
+                            config.warmupTokens)
+                        progress = 0
                     else:
-                        lr = config.learningRate
+                        # cosine learning rate decay
+                        progress = float(self.tokens - config.warmupTokens) / float(
+                            max(1, config.finalTokens - config.warmupTokens))
+                        # progress = min(progress * 1.1, 1.0) # more fine-tuning with low LR
+                        lrMult = (0.5 + lrFinalFactor / 2) + (0.5 - lrFinalFactor / 2) * math.cos(
+                            math.pi * progress)
 
-                    pbar.set_description(
-                        f"epoch {epoch+1} iter {it + 1}: r2_score {totalR2s / (it + 1):.2f} loss {totalLoss / (it + 1):.4f} lr {lr:e}")
+                    lr = config.learningRate * lrMult
+                    for paramGroup in self.config.optimizer.param_groups:
+                        paramGroup['lr'] = lr
+                else:
+                    lr = config.learningRate
 
-        self.Loss_train.append(totalLoss / ct)
-        self.r2_train.append(totalR2s / ct)
+                pbar.set_description(
+                    f"epoch {epoch+1} iter {it + 1}: r2_score {totalR2s / (it + 1):.2f} loss {totalLoss / (it + 1):.4f} lr {lr:e}")
+
+        with open("train.csv", "a", encoding="utf-8") as file:
+            file.write(f"{totalLoss / ct:.4f}, {totalR2s / ct:.4f}\n")
 
         return predicts, targets
 
@@ -166,37 +161,17 @@ class Trainer:
 
                 totalLoss += loss.item()
                 totalR2s += r2_s.item()
-                self.Loss_test.append(loss.item())
-                self.r2_test.append(r2_s.item())
+                # self.Loss_test.append(loss.item())
+                # self.r2_test.append(r2_s.item())
 
         ct += 1
-        # pbar = tqdm(enumerate(self.testloader), total=len(self.testloader),
-        #             bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}') if self.t else enumerate(self.testloader)
-        # ct =  0
-        # for it, (x, y) in pbar:
-        #     x = x.to(self.device)  # place data on the correct device
-        #     y = y.to(self.device)
-        #     ct += 1
 
-        #     with torch.set_grad_enabled(self.t):
-        #         out = model(x)  # forward the model
-        #         predicts.append(out.detach().view(-1, 2))
-        #         targets.append(y.detach().view(-1, 2))
-        #         # loss = loss.mean()  # collapse all losses if they are scattered on multiple gpus
-        #         loss = self.config.criterion(out.view(-1, 2), y.view(-1, 2))
-        #         r2_s = r2_score(out.view(-1, 2), y.view(-1, 2))
-        #     totalLoss += loss.item()
-        #     totalR2s += r2_s.item()
-        #     self.Loss_test.append(loss.item())
-        #     self.r2_test.append(r2_s.item())
-        #     print(f"Batch Loss: {loss:.4f} R2_score: {r2_s:.4f}")
-
-        MeanLoss = totalLoss / ct
-        MeanR2 = totalR2s / ct
+        with open("train.csv", "a", encoding="utf-8") as file:
+            file.write(f"")
         print(f"Test Mean Loss: {totalLoss / ct:.4f}, R2_score: {totalR2s / ct:.4f},  Num_iter: {ct}")
 
-        save_data2txt(predicts, 'src_trg_data/test_predict.txt')
-        save_data2txt(targets, 'src_trg_data/test_target.txt')
+        # save_data2txt(predicts, 'src_trg_data/test_predict.txt')
+        # save_data2txt(targets, 'src_trg_data/test_target.txt')
 
         # n = 10000
         # tar = torch.cat(targets, dim=0).numpy()

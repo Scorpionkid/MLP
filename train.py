@@ -21,7 +21,7 @@ logging.basicConfig(format="%(asctime)s - %(levelname)s - %(name)s - %(message)s
 # data
 modelType = "MLP"
 dataName = 'Makin'
-dataPath = "../Markin/Makin_processed_npy/"
+dataPath = "../Makin/Makin_origin_npy/"
 dataFileCoding = "utf-8"
 # use 0 for char-level english and 1 for chinese. Only affects some Transormer hyperparameters
 dataFileType = 0
@@ -29,8 +29,8 @@ dataFileType = 0
 # hyperparameter
 epochSaveFrequency = 10    # every ten epoch
 epochSavePath = "pth/trained-"
-batchSize = 32
-nEpoch = 5
+batchSize = 128
+nEpoch = 50
 gap_num = 10    # the time slice
 seq_size = 256    # the length of the sequence
 input_size = 96
@@ -50,6 +50,9 @@ epochLengthFixed = 10000    # make every epoch very short, so we can see the tra
 
 # loading data
 print('loading data... ' + dataName)
+
+with open("train.csv", "a", encoding="utf-8") as file:
+    file.write(dataPath + " batch size " + str(batchSize) + " epochs " + str(nEpoch) + " sequence len " + str(seq_size) + '\n')
 
 
 class Dataset(Dataset):
@@ -84,6 +87,8 @@ model = MLP(input_size, layerSizes, out_size, device)
 rawModel = model.module if hasattr(model, "module") else model
 rawModel = rawModel.float()
 
+print("number of parameters: " + str(sum(p.numel() for p in model.parameters())))
+
 # 定义损失函数和优化器
 criterion = nn.MSELoss()
 optimizer = optim.Adam(rawModel.parameters(), lr=4e-3)
@@ -101,7 +106,14 @@ tConf = TrainerConfig(modelType=modelType, maxEpochs=nEpoch, batchSize=batchSize
                       criterion=criterion, optimizer=optimizer)
 
 trainer = Trainer(model, train_dataloader, test_dataloader, tConf)
+with open("train.csv", "a", encoding="utf-8") as file:
+    file.write(f"trian loss, train r2 score\n")
+
 trainer.train()
+
+with open("train.csv", "a", encoding="utf-8") as file:
+    file.write(f"test loss, test r2 score\n")
+
 trainer.test()
 
 # torch.save(model, epochSavePath + trainer.get_runName() + '-' + datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')

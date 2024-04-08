@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 # from torcheval.metrics.functional import r2_score
 
+
 # MLP
 class MLP(nn.Module):
     def __init__(self, input_size, layerSizes, out_size, device):
