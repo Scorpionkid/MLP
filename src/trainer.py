@@ -64,72 +64,75 @@ class Trainer:
 
         return runName
 
-    def train_epoch(self, split, epoch, model, config):
-        predicts = []
-        targets = []
-        totalLoss = 0
-        totalR2s = 0
-        self.t = split == 'train'
-        model.train(self.t)
-        pbar = tqdm(enumerate(self.train_dataloader), total=len(self.train_dataloader),
-                    bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}') if self.t else enumerate(self.train_dataloader)
-
-        for it, (x, y) in pbar:
-            x = x.to(self.device)
-            y = y.to(self.device)
-
-            with torch.set_grad_enabled(self.t):
-                out = model(x)
-                predicts.append(out.view(-1, 2).cpu().detach())
-                targets.append(y.view(-1, 2).cpu().detach())
-                # loss = loss.mean()
-
-                if self.t:
-                    model.zero_grad()
-                    loss = self.config.criterion(out.view(-1, 2), y.view(-1, 2))
-                    r2_s = r2_score(out.view(-1, 2), y.view(-1, 2))
-                    totalLoss += loss.item()
-                    totalR2s += r2_s.item()
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradNormClip)
-                    self.config.optimizer.step()
-                    self.config.scheduler.step()
-
-                    if config.lrDecay:
-                        self.tokens += (y >= 0).sum()
-                        lrFinalFactor = config.lrFinal / config.learningRate
-                        if self.tokens < config.warmupTokens:
-                            # linear warmup
-                            lrMult = lrFinalFactor + (1 - lrFinalFactor) * float(self.tokens) / float(
-                                config.warmupTokens)
-                            progress = 0
-                        else:
-                            # cosine learning rate decay
-                            progress = float(self.tokens - config.warmupTokens) / float(
-                                max(1, config.finalTokens - config.warmupTokens))
-                            # progress = min(progress * 1.1, 1.0) # more fine-tuning with low LR
-                            lrMult = (0.5 + lrFinalFactor / 2) + (0.5 - lrFinalFactor / 2) * math.cos(
-                                math.pi * progress)
-
-                        lr = config.learningRate * lrMult
-                        for paramGroup in self.config.optimizer.param_groups:
-                            paramGroup['lr'] = lr
-                    else:
-                        lr = config.learningRate
-
-                    pbar.set_description(
-                        f"epoch {epoch+1} progress {progress * 100.0:.2f}% iter {it + 1}: r2_score "
-                        f"{totalR2s / (it + 1):.2f} loss {totalLoss / (it + 1):.4f} lr {lr:e}")
-        it += 1
-        self.Loss_train.append(totalLoss / it)
-        self.r2_train.append(totalR2s / it)
-        return predicts, targets
-
     def train(self):
         model, config = self.model, self.config
 
         for epoch in range(config.maxEpochs):
-            predicts, targets = self.train_epoch('train', epoch, model, config)
+            predicts = []
+            targets = []
+            totalLoss = 0
+            totalR2s = 0
+            self.t = True
+            model.train(self.t)
+            pbar = tqdm(enumerate(self.train_dataloader), total=len(self.train_dataloader),
+                        bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}') if self.t else enumerate(self.train_dataloader)
+
+            for it, (x, y) in pbar:
+                x = x.to(self.device)
+                y = y.to(self.device)
+
+                with torch.set_grad_enabled(self.t):
+                    out = model(x)
+                    predicts.append(out.view(-1, 2).cpu().detach())
+                    targets.append(y.view(-1, 2).cpu().detach())
+                    # loss = loss.mean()
+
+                    if self.t:
+                        model.zero_grad()
+                        loss = self.config.criterion(out.view(-1, 2), y.view(-1, 2))
+                        r2_s = r2_score(out.view(-1, 2), y.view(-1, 2))
+                        totalLoss += loss.item()
+                        totalR2s += r2_s.item()
+                        loss.backward()
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradNormClip)
+                        self.config.optimizer.step()
+                        # self.config.scheduler.step()
+
+                        if config.lrDecay:
+                            self.tokens += (y >= 0).sum()
+                            lrFinalFactor = config.lrFinal / config.learningRate
+                            if self.tokens < config.warmupTokens:
+                                # linear warmup
+                                lrMult = lrFinalFactor + (1 - lrFinalFactor) * float(self.tokens) / float(
+                                    config.warmupTokens)
+                                progress = 0
+                            else:
+                                # cosine learning rate decay
+                                progress = float(self.tokens - config.warmupTokens) / float(
+                                    max(1, config.finalTokens - config.warmupTokens))
+                                # progress = min(progress * 1.1, 1.0) # more fine-tuning with low LR
+                                lrMult = (0.5 + lrFinalFactor / 2) + (0.5 - lrFinalFactor / 2) * math.cos(
+                                    math.pi * progress)
+
+                            lr = config.learningRate * lrMult
+                            for paramGroup in self.config.optimizer.param_groups:
+                                paramGroup['lr'] = lr
+                        else:
+                            lr = config.learningRate
+
+                        pbar.set_description(
+                            f"epoch {epoch + 1} progress {progress * 100.0:.2f}% iter {it + 1}: r2_score "
+                            f"{totalR2s / (it + 1):.2f} loss {totalLoss / (it + 1):.4f} lr {lr:e}")
+            # 画图就用每个epoch的数据
+            # self.Loss_train.append(totalLoss / (it + 1))
+            # self.r2_train.append(totalR2s / (it + 1))
+
+            if epoch == self.config.maxEpochs - 1:
+                # 如果不画图就用最后一个epoch的数据存进excel中
+                self.Loss_train.append(totalLoss / (it + 1))
+                self.r2_train.append(totalR2s / (it + 1))
+                print(
+                    f"Train Loss: {totalLoss / (it + 1):.4f}, R2_score: {totalR2s / (it + 1):.4f},  Epoch: {self.config.maxEpochs}")
 
     def test(self):
         model, config = self.model, self.config
@@ -169,36 +172,36 @@ class Trainer:
         # save_data2txt(predicts, 'src_trg_data/test_predict.txt')
         # save_data2txt(targets, 'src_trg_data/test_target.txt')
 
-        # n = 10000
-        # tar = torch.cat(targets, dim=0).cpu().detach().numpy()
-        # pre = torch.cat(predicts, dim=0).cpu().detach().numpy()
-        # tar_x_v = tar[:n, 0]
-        # tar_y_v = tar[:n, 1]
-        # pre_x_v = pre[:n, 0]
-        # pre_y_v = pre[:n, 1]
-        #
-        # fig, axs = plt.subplots(3, 2, figsize=(10, 15))
-        #
-        # axs[0,0].plot(range(0, self.config.maxEpochs), self.Loss_train)
-        # axs[0,0].set_title("loss_train")
-        # axs[0,1].plot(range(0, self.config.maxEpochs), self.r2_train)
-        # axs[0,1].set_title("r2_train")
-        #
-        # axs[1,0].plot(range(0, ct), self.Loss_test)
-        # axs[1,0].set_title(f"Loss_test\nMean loss: {MeanLoss:.4f}")
-        #
-        # axs[1,1].plot(range(0, ct), self.r2_test)
-        # axs[1,1].set_title(f"r2_test\nMean r2s: {MeanR2:.4f}")
-        #
-        #
-        # axs[2,0].plot(range(0, len(tar_x_v)), tar_x_v, label='tar_x_v')
-        # axs[2,0].plot(range(0, len(pre_x_v)), pre_x_v, label='pre_x_v')
-        # axs[2,0].legend()  # 调用特定轴的legend方法
-        #
-        # axs[2,1].plot(range(0, len(tar_y_v)), tar_y_v, label='tar_y_v')
-        # axs[2,1].plot(range(0, len(pre_y_v)), pre_y_v, label='pre_y_v')
-        # axs[2,1].legend()  # 调用特定轴的legend方法
-        #
-        # # 自动调整子图间距
-        # plt.tight_layout()
-        # plt.show()
+        n = 10000
+        tar = torch.cat(targets, dim=0).cpu().detach().numpy()
+        pre = torch.cat(predicts, dim=0).cpu().detach().numpy()
+        tar_x_v = tar[:n, 0]
+        tar_y_v = tar[:n, 1]
+        pre_x_v = pre[:n, 0]
+        pre_y_v = pre[:n, 1]
+
+        fig, axs = plt.subplots(3, 2, figsize=(10, 15))
+
+        axs[0,0].plot(range(0, self.config.maxEpochs), self.Loss_train)
+        axs[0,0].set_title("loss_train")
+        axs[0,1].plot(range(0, self.config.maxEpochs), self.r2_train)
+        axs[0,1].set_title("r2_train")
+
+        axs[1,0].plot(range(0, ct), self.Loss_test)
+        axs[1,0].set_title(f"Loss_test\nMean loss: {MeanLoss:.4f}")
+
+        axs[1,1].plot(range(0, ct), self.r2_test)
+        axs[1,1].set_title(f"r2_test\nMean r2s: {MeanR2:.4f}")
+
+
+        axs[2,0].plot(range(0, len(tar_x_v)), tar_x_v, label='tar_x_v')
+        axs[2,0].plot(range(0, len(pre_x_v)), pre_x_v, label='pre_x_v')
+        axs[2,0].legend()  # 调用特定轴的legend方法
+
+        axs[2,1].plot(range(0, len(tar_y_v)), tar_y_v, label='tar_y_v')
+        axs[2,1].plot(range(0, len(pre_y_v)), pre_y_v, label='pre_y_v')
+        axs[2,1].legend()  # 调用特定轴的legend方法
+
+        # 自动调整子图间距
+        plt.tight_layout()
+        plt.show()

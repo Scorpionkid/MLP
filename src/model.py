@@ -11,9 +11,12 @@ class MLP(nn.Module):
                                      zip(layerSizes[:-1], layerSizes[1:])])
         self.device = device
 
+
     def forward(self, src):
-        for layer in self.layers:
-            src = torch.relu(layer(src))  # 或者使用其他激活函数，如 sigmoid, tanh 等
+        for layer in self.layers[:-1]:
+            src = F.relu(layer(src))
+            # 最后一层输出不使用ReLU激活函数
+        src = self.layers[-1](src)
         return src
 
 

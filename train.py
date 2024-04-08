@@ -27,6 +27,7 @@ modelType = "MLP"
 dataFile = "indy_20160627_01.mat"
 dataPath = "../data/Makin/"
 npy_folder_path = "../data/Makin_processed_npy"
+ori_npy_folder_path = "../data/Makin_origin_npy"
 excel_path = 'results/'
 dataFileCoding = "utf-8"
 # use 0 for char-level english and 1 for chinese. Only affects some Transormer hyperparameters
@@ -55,7 +56,7 @@ epochLengthFixed = 10000    # make every epoch very short, so we can see the tra
 dimensions = ['test_r2', 'test_loss', 'train_r2', 'train_loss']
 
 # loading data
-print('loading data... ' + npy_folder_path)
+print('loading data... ' + ori_npy_folder_path)
 
 
 class Dataset(Dataset):
@@ -89,15 +90,10 @@ class Dataset(Dataset):
             y = torch.tensor(self.y[start_idx:end_idx, :], dtype=torch.float32)
         return x, y
 
-# spike, y, t = load_mat(dataPath+dataFile)
-# # y = resample_data(y, 4, 1)
-# # new_time = np.linspace(t[0, 0], t[0, -1], len(y))
-# # spike, target = spike_to_counts2(spike, y, np.transpose(new_time), gap_num)
-# spike, target = spike_to_counts1(spike, y, t[0])
 
 # 获取spike和target子目录的绝对路径
-spike_subdir = os.path.join(npy_folder_path, "spike")
-target_subdir = os.path.join(npy_folder_path, "target")
+spike_subdir = os.path.join(ori_npy_folder_path, "spike")
+target_subdir = os.path.join(ori_npy_folder_path, "target")
 
 # 获取spike和target目录下所有的npy文件名
 spike_files = sorted([f for f in os.listdir(spike_subdir) if f.endswith('.npy')])
@@ -106,11 +102,12 @@ target_files = sorted([f for f in os.listdir(target_subdir) if f.endswith('.npy'
 # 确保两个目录下的文件一一对应
 assert len(spike_files) == len(target_files)
 results = []
-
 # 遍历文件并对每一对spike和target文件进行处理
 for spike_file, target_file in zip(spike_files, target_files):
     # 提取前缀名以确保对应文件正确
-    prefix = spike_file.split('_processed_spike')[0]
+    prefix = spike_file.split('_spike')[0]
+    # if prefix != 'indy_20160627_01':
+        # continue
 
     assert prefix in target_file, f"Mismatched prefix: {prefix} vs {target_file}"
 
@@ -118,9 +115,15 @@ for spike_file, target_file in zip(spike_files, target_files):
     spike = np.load(os.path.join(spike_subdir, spike_file))
     target = np.load(os.path.join(target_subdir, target_file))
 
+    # spike, y, t = load_mat(dataPath+dataFile)
+    # # y = resample_data(y, 4, 1)
+    # # new_time = np.linspace(t[0, 0], t[0, -1], len(y))
+    # # spike, target = spike_to_counts2(spike, y, np.transpose(new_time), gap_num)
+    # spike, target = spike_to_counts1(spike, y, t[0])
+
     dataset = Dataset(seq_size, out_size, spike, target)
 
-    # # 归一化
+    # 归一化
     # dataset.x, dataset.y = gaussian_nomalization(dataset.x, dataset.y)
     # # 平滑处理
     # dataset.x = gaussian_filter1d(dataset.x, 3, axis=0)
@@ -135,21 +138,23 @@ for spike_file, target_file in zip(spike_files, target_files):
     # train_Dataset, test_Dataset = split_dataset(ctxLen, out_dim, dataset, trainSize)
     train_Dataset = Subset(dataset, range(0, int(0.8 * len(dataset))))
     test_Dataset = Subset(dataset, range(int(0.8 * len(dataset)), len(dataset)))
-    train_dataloader = DataLoader(train_Dataset, batch_size=batchSize, shuffle=True)
-    test_dataloader = DataLoader(test_Dataset, batch_size=len(test_Dataset), shuffle=True)
+    train_dataloader = DataLoader(train_Dataset, batch_size=batchSize, shuffle=True, pin_memory=True)
+    test_dataloader = DataLoader(test_Dataset, batch_size=len(test_Dataset), shuffle=True, pin_memory=True)
 
     num_hidden_layers = num_layers - 1
     step = (hidden_size - out_size) / num_hidden_layers
     # 构建 layerSizes 列表
     layerSizes = [input_size] + [max(int(hidden_size - step * i), out_size) for i in range(num_hidden_layers)] + [out_size]
     model = MLP(layerSizes)
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f'Total parameters: {total_params}')
     rawModel = model.module if hasattr(model, "module") else model
     rawModel = rawModel.float()
 
     # 定义损失函数和优化器
     criterion = nn.MSELoss()
     optimizer = optim.Adam(rawModel.parameters(), lr=4e-3)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
 
     print('model', modelType, 'epoch', nEpoch, 'batchsz', batchSize,
           'seq_size', seq_size, 'hidden_size', hidden_size, 'num_layers', num_layers)
@@ -167,7 +172,7 @@ for spike_file, target_file in zip(spike_files, target_files):
     result = trainer.test()
     result['file_name'] = prefix
     results.append(result)
-    print('done')
+    print(prefix + 'done')
     # torch.save(model, epochSavePath + trainer.get_runName() + '-' + datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
     #            + '.pth')
-save_to_excel(results, excel_path + os.path.basename(npy_folder_path) + '-' + modelType + '-' + 'results.xlsx', modelType, nEpoch, dimensions)
+save_to_excel(results, excel_path + os.path.basename(ori_npy_folder_path) + '-' + str(nEpoch) + '-' + modelType + '-' + 'results.xlsx', modelType, nEpoch, dimensions)
