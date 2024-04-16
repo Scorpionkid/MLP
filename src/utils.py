@@ -318,13 +318,13 @@ def min_max_nomalization(x, y):
 
     return x, y
 
-def save_to_excel(results, excel_path, model_name, epoch, dimensions):
+def save_to_excel(results, excel_path, model_name, dimensions):
     # 创建一个包含所需列的新行DataFrame
     columns = ['filename', 'model', 'epoch'] + dimensions
     df_rows = []
 
     for result in results:
-        file_data = [result['file_name'], model_name, epoch] + [result.get(dim, '') for dim in dimensions]
+        file_data = [result['file_name'], model_name, result['epoch']] + [result.get(dim, '') for dim in dimensions]
         df_rows.append(file_data)
 
     df_results = pd.DataFrame(df_rows, columns=columns)

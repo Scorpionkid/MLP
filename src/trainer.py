@@ -121,18 +121,24 @@ class Trainer:
                             lr = config.learningRate
 
                         pbar.set_description(
-                            f"epoch {epoch + 1} progress {progress * 100.0:.2f}% iter {it + 1}: r2_score "
-                            f"{totalR2s / (it + 1):.2f} loss {totalLoss / (it + 1):.4f} lr {lr:e}")
+                            f"epoch {epoch + 1} "
+                            # f"progress {progress * 100.0:.2f}%"
+                            f"iter {it + 1}: r2_score "
+                            f"{totalR2s / (it + 1):.2f} loss {totalLoss / (it + 1):.4f}"
+                            f"lr {self.config.optimizer.param_groups[0]['lr']:e}")
+            MeanR2 = totalR2s / (it + 1)
             # 画图就用每个epoch的数据
             # self.Loss_train.append(totalLoss / (it + 1))
             # self.r2_train.append(totalR2s / (it + 1))
 
-            if epoch == self.config.maxEpochs - 1:
+            if epoch == self.config.maxEpochs - 1 or MeanR2 >= 0.88:
                 # 如果不画图就用最后一个epoch的数据存进excel中
                 self.Loss_train.append(totalLoss / (it + 1))
                 self.r2_train.append(totalR2s / (it + 1))
                 print(
-                    f"Train Loss: {totalLoss / (it + 1):.4f}, R2_score: {totalR2s / (it + 1):.4f},  Epoch: {self.config.maxEpochs}")
+                    f"Train Loss: {totalLoss / (it + 1):.4f}, R2_score: {totalR2s / (it + 1):.4f},  Epoch: {epoch + 1}")
+                self.results['epoch'] = epoch + 1
+                break
 
     def test(self):
         model, config = self.model, self.config
@@ -166,11 +172,9 @@ class Trainer:
 
         self.results['test_loss'] = MeanLoss
         self.results['test_r2'] = MeanR2
-        self.results['train_loss'] = np.mean(self.Loss_train)
-        self.results['train_r2'] = np.mean(self.r2_train)
+        self.results['train_loss'] = self.Loss_train[-1]
+        self.results['train_r2'] = self.r2_train[-1]
         return self.results
-        # save_data2txt(predicts, 'src_trg_data/test_predict.txt')
-        # save_data2txt(targets, 'src_trg_data/test_target.txt')
 
         n = 10000
         tar = torch.cat(targets, dim=0).cpu().detach().numpy()

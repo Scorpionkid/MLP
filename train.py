@@ -37,17 +37,17 @@ dataFileType = 0
 epochSaveFrequency = 10    # every ten epoch
 epochSavePath = "pth/trained-"
 batchSize = 32
-nEpoch = 20
+nEpoch = 60
 gap_num = 10    # the time slice
 seq_size = 128    # the length of the sequence
 input_size = 96
 hidden_size = 256
 out_size = 2   # the output dim
-num_layers = 6
+num_layers = 10
 
 # learning rate
-lrInit = 6e-4 if modelType == "MLP" else 4e3   # Transormer can use higher learning rate
-lrFinal = 4e-4
+lrInit = 1e-2 if modelType == "MLP" else 4e3
+lrFinal = 1e-4
 
 betas = (0.9, 0.99)
 eps = 4e-9
@@ -106,8 +106,24 @@ results = []
 for spike_file, target_file in zip(spike_files, target_files):
     # 提取前缀名以确保对应文件正确
     prefix = spike_file.split('_spike')[0]
-    # if prefix != 'indy_20160627_01':
-        # continue
+
+    prefixes = [
+        # 'indy_20160627_01',
+        # 'indy_20160927_04',
+        # 'indy_20160921_01',
+        'indy_20161220_02',
+        # 'indy_20161024_03',
+        # 'indy_20161026_03',
+        # 'indy_20160927_04',
+        # 'indy_20161005_06',
+        # 'indy_20160930_05',
+        # 'indy_20160624_03',
+        # 'indy_20161025_04',
+        # 'indy_20161207_02',
+        # 'indy_20161014_04'
+    ]
+    if prefix not in prefixes:
+        continue
 
     assert prefix in target_file, f"Mismatched prefix: {prefix} vs {target_file}"
 
@@ -145,6 +161,7 @@ for spike_file, target_file in zip(spike_files, target_files):
     step = (hidden_size - out_size) / num_hidden_layers
     # 构建 layerSizes 列表
     layerSizes = [input_size] + [max(int(hidden_size - step * i), out_size) for i in range(num_hidden_layers)] + [out_size]
+    # layerSizes = [input_size] + [hidden_size] * num_hidden_layers + [out_size]
     model = MLP(layerSizes)
     total_params = sum(p.numel() for p in model.parameters())
     print(f'Total parameters: {total_params}')
@@ -153,8 +170,8 @@ for spike_file, target_file in zip(spike_files, target_files):
 
     # 定义损失函数和优化器
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(rawModel.parameters(), lr=4e-3)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
+    optimizer = optim.Adam(rawModel.parameters(), lr=lrInit)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
 
     print('model', modelType, 'epoch', nEpoch, 'batchsz', batchSize,
           'seq_size', seq_size, 'hidden_size', hidden_size, 'num_layers', num_layers)
@@ -175,4 +192,4 @@ for spike_file, target_file in zip(spike_files, target_files):
     print(prefix + 'done')
     # torch.save(model, epochSavePath + trainer.get_runName() + '-' + datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
     #            + '.pth')
-save_to_excel(results, excel_path + os.path.basename(ori_npy_folder_path) + '-' + str(nEpoch) + '-' + modelType + '-' + 'results.xlsx', modelType, nEpoch, dimensions)
+save_to_excel(results, excel_path + os.path.basename(ori_npy_folder_path) + '-' + modelType + '-' + 'results.xlsx', modelType, dimensions)
