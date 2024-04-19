@@ -83,8 +83,6 @@ class Trainer:
 
                 with torch.set_grad_enabled(self.t):
                     out = model(x)
-                    predicts.append(out.view(-1, 2).cpu().detach())
-                    targets.append(y.view(-1, 2).cpu().detach())
                     # loss = loss.mean()
 
                     if self.t:
@@ -96,29 +94,29 @@ class Trainer:
                         loss.backward()
                         torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradNormClip)
                         self.config.optimizer.step()
-                        # self.config.scheduler.step()
+                        self.config.scheduler.step()
 
-                        if config.lrDecay:
-                            self.tokens += (y >= 0).sum()
-                            lrFinalFactor = config.lrFinal / config.learningRate
-                            if self.tokens < config.warmupTokens:
-                                # linear warmup
-                                lrMult = lrFinalFactor + (1 - lrFinalFactor) * float(self.tokens) / float(
-                                    config.warmupTokens)
-                                progress = 0
-                            else:
-                                # cosine learning rate decay
-                                progress = float(self.tokens - config.warmupTokens) / float(
-                                    max(1, config.finalTokens - config.warmupTokens))
-                                # progress = min(progress * 1.1, 1.0) # more fine-tuning with low LR
-                                lrMult = (0.5 + lrFinalFactor / 2) + (0.5 - lrFinalFactor / 2) * math.cos(
-                                    math.pi * progress)
-
-                            lr = config.learningRate * lrMult
-                            for paramGroup in self.config.optimizer.param_groups:
-                                paramGroup['lr'] = lr
-                        else:
-                            lr = config.learningRate
+                        # if config.lrDecay:
+                        #     self.tokens += (y >= 0).sum()
+                        #     lrFinalFactor = config.lrFinal / config.learningRate
+                        #     if self.tokens < config.warmupTokens:
+                        #         # linear warmup
+                        #         lrMult = lrFinalFactor + (1 - lrFinalFactor) * float(self.tokens) / float(
+                        #             config.warmupTokens)
+                        #         progress = 0
+                        #     else:
+                        #         # cosine learning rate decay
+                        #         progress = float(self.tokens - config.warmupTokens) / float(
+                        #             max(1, config.finalTokens - config.warmupTokens))
+                        #         # progress = min(progress * 1.1, 1.0) # more fine-tuning with low LR
+                        #         lrMult = (0.5 + lrFinalFactor / 2) + (0.5 - lrFinalFactor / 2) * math.cos(
+                        #             math.pi * progress)
+                        #
+                        #     lr = config.learningRate * lrMult
+                        #     for paramGroup in self.config.optimizer.param_groups:
+                        #         paramGroup['lr'] = lr
+                        # else:
+                        #     lr = config.learningRate
 
                         pbar.set_description(
                             f"epoch {epoch + 1} "

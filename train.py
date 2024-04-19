@@ -37,7 +37,7 @@ dataFileType = 0
 epochSaveFrequency = 10    # every ten epoch
 epochSavePath = "pth/trained-"
 batchSize = 32
-nEpoch = 60
+nEpoch = 20
 gap_num = 10    # the time slice
 seq_size = 128    # the length of the sequence
 input_size = 96
@@ -69,25 +69,11 @@ class Dataset(Dataset):
 
     def __len__(self):
         # 向上取整
-        return (len(self.x) + self.seq_size - 1) // self.seq_size
+        return len(self.x) - self.seq_size
 
     def __getitem__(self, idx):
-        start_idx = idx * self.seq_size
-        end_idx = start_idx + self.seq_size
-
-        # 处理最后一个可能不完整的序列
-        if end_idx > len(self.x):
-            # 对x和y进行填充以达到期望的序列长度
-            pad_size_x = end_idx - len(self.x)
-            x_padded = np.pad(self.x[start_idx:len(self.x), :], ((0, pad_size_x), (0, 0)), mode='constant',
-                              constant_values=0)
-            y_padded = np.pad(self.y[start_idx:len(self.y), :], ((0, pad_size_x), (0, 0)), mode='constant',
-                              constant_values=0)
-            x = torch.tensor(x_padded, dtype=torch.float32)
-            y = torch.tensor(y_padded, dtype=torch.float32)
-        else:
-            x = torch.tensor(self.x[start_idx:end_idx, :], dtype=torch.float32)
-            y = torch.tensor(self.y[start_idx:end_idx, :], dtype=torch.float32)
+        x = torch.tensor(self.x[idx:idx + self.seq_size, :], dtype=torch.float32)
+        y = torch.tensor(self.y[idx + self.seq_size, :], dtype=torch.float32)
         return x, y
 
 
