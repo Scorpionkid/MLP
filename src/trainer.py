@@ -96,27 +96,27 @@ class Trainer:
                         self.config.optimizer.step()
                         self.config.scheduler.step()
 
-                        # if config.lrDecay:
-                        #     self.tokens += (y >= 0).sum()
-                        #     lrFinalFactor = config.lrFinal / config.learningRate
-                        #     if self.tokens < config.warmupTokens:
-                        #         # linear warmup
-                        #         lrMult = lrFinalFactor + (1 - lrFinalFactor) * float(self.tokens) / float(
-                        #             config.warmupTokens)
-                        #         progress = 0
-                        #     else:
-                        #         # cosine learning rate decay
-                        #         progress = float(self.tokens - config.warmupTokens) / float(
-                        #             max(1, config.finalTokens - config.warmupTokens))
-                        #         # progress = min(progress * 1.1, 1.0) # more fine-tuning with low LR
-                        #         lrMult = (0.5 + lrFinalFactor / 2) + (0.5 - lrFinalFactor / 2) * math.cos(
-                        #             math.pi * progress)
-                        #
-                        #     lr = config.learningRate * lrMult
-                        #     for paramGroup in self.config.optimizer.param_groups:
-                        #         paramGroup['lr'] = lr
-                        # else:
-                        #     lr = config.learningRate
+                        if config.lrDecay:
+                            self.tokens += (y >= 0).sum()
+                            lrFinalFactor = config.lrFinal / config.learningRate
+                            if self.tokens < config.warmupTokens:
+                                # linear warmup
+                                lrMult = lrFinalFactor + (1 - lrFinalFactor) * float(self.tokens) / float(
+                                    config.warmupTokens)
+                                progress = 0
+                            else:
+                                # cosine learning rate decay
+                                progress = float(self.tokens - config.warmupTokens) / float(
+                                    max(1, config.finalTokens - config.warmupTokens))
+                                # progress = min(progress * 1.1, 1.0) # more fine-tuning with low LR
+                                lrMult = (0.5 + lrFinalFactor / 2) + (0.5 - lrFinalFactor / 2) * math.cos(
+                                    math.pi * progress)
+
+                            lr = config.learningRate * lrMult
+                            for paramGroup in self.config.optimizer.param_groups:
+                                paramGroup['lr'] = lr
+                        else:
+                            lr = config.learningRate
 
                         pbar.set_description(
                             f"epoch {epoch + 1} "
@@ -172,9 +172,9 @@ class Trainer:
         self.results['test_r2'] = MeanR2
         self.results['train_loss'] = self.Loss_train[-1]
         self.results['train_r2'] = self.r2_train[-1]
-        return self.results
+        # return self.results
 
-        n = 10000
+        n = 100
         tar = torch.cat(targets, dim=0).cpu().detach().numpy()
         pre = torch.cat(predicts, dim=0).cpu().detach().numpy()
         tar_x_v = tar[:n, 0]
@@ -184,10 +184,10 @@ class Trainer:
 
         fig, axs = plt.subplots(3, 2, figsize=(10, 15))
 
-        axs[0,0].plot(range(0, self.config.maxEpochs), self.Loss_train)
-        axs[0,0].set_title("loss_train")
-        axs[0,1].plot(range(0, self.config.maxEpochs), self.r2_train)
-        axs[0,1].set_title("r2_train")
+        # axs[0,0].plot(range(0, self.config.maxEpochs), self.Loss_train)
+        # axs[0,0].set_title("loss_train")
+        # axs[0,1].plot(range(0, self.config.maxEpochs), self.r2_train)
+        # axs[0,1].set_title("r2_train")
 
         axs[1,0].plot(range(0, ct), self.Loss_test)
         axs[1,0].set_title(f"Loss_test\nMean loss: {MeanLoss:.4f}")

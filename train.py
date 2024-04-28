@@ -39,15 +39,15 @@ epochSavePath = "pth/trained-"
 batchSize = 32
 nEpoch = 20
 gap_num = 10    # the time slice
-seq_size = 128    # the length of the sequence
+seq_size = 256    # the length of the sequence
 input_size = 96
 hidden_size = 256
 out_size = 2   # the output dim
 num_layers = 10
 
 # learning rate
-lrInit = 1e-2 if modelType == "MLP" else 4e3
-lrFinal = 1e-4
+lrInit = 8e-4 if modelType == "MLP" else 4e3
+lrFinal = 4e-4
 
 betas = (0.9, 0.99)
 eps = 4e-9
@@ -68,7 +68,6 @@ class Dataset(Dataset):
         self.y = target
 
     def __len__(self):
-        # 向上取整
         return len(self.x) - self.seq_size
 
     def __getitem__(self, idx):
@@ -141,14 +140,20 @@ for spike_file, target_file in zip(spike_files, target_files):
     train_Dataset = Subset(dataset, range(0, int(0.8 * len(dataset))))
     test_Dataset = Subset(dataset, range(int(0.8 * len(dataset)), len(dataset)))
     train_dataloader = DataLoader(train_Dataset, batch_size=batchSize, shuffle=True, pin_memory=True)
-    test_dataloader = DataLoader(test_Dataset, batch_size=len(test_Dataset), shuffle=True, pin_memory=True)
+    test_dataloader = DataLoader(test_Dataset, batch_size=len(test_Dataset), shuffle=False, pin_memory=True)
 
     num_hidden_layers = num_layers - 1
     step = (hidden_size - out_size) / num_hidden_layers
     # 构建 layerSizes 列表
     layerSizes = [input_size] + [max(int(hidden_size - step * i), out_size) for i in range(num_hidden_layers)] + [out_size]
+
+    # input_size2 = seq_size*input_size
+    # step2 = (input_size2 - hidden_size) / num_hidden_layers
+    # layerSizes2 = [input_size2] + [max(int(input_size2 - step2 * i), out_size) for i in range(num_hidden_layers)] + [out_size]
     # layerSizes = [input_size] + [hidden_size] * num_hidden_layers + [out_size]
-    model = MLP(layerSizes)
+    model = MLP(layerSizes,
+                # layerSizes2
+                )
     total_params = sum(p.numel() for p in model.parameters())
     print(f'Total parameters: {total_params}')
     rawModel = model.module if hasattr(model, "module") else model
@@ -157,7 +162,7 @@ for spike_file, target_file in zip(spike_files, target_files):
     # 定义损失函数和优化器
     criterion = nn.MSELoss()
     optimizer = optim.Adam(rawModel.parameters(), lr=lrInit)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=2000, gamma=0.8)
 
     print('model', modelType, 'epoch', nEpoch, 'batchsz', batchSize,
           'seq_size', seq_size, 'hidden_size', hidden_size, 'num_layers', num_layers)
